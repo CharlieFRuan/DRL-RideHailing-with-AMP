@@ -12,21 +12,24 @@ from policy import NNPolicy
 import tensorflow_probability as tfp
 import numpy as np
 from collections import OrderedDict
+import argparse
 
 @ray.remote
 class Agent(object):
     
-    def __init__(self, network: Env, scaler: Scaler, hid1_mult, hid3_size, sz_voc, embed_dim):
+    def __init__(self, network: Env, scaler: Scaler, hid1_mult, hid3_size, sz_voc, embed_dim, model_dir):
         """
         network: transporation network, our environment
         scaler: for standardizing/normalizing values
         """
+        self.network = network 
+        self.scaler=  scaler
         obs_dim = network.obs_dim
         act_dim = network.R * network.R
         self.policy_model = NNPolicy(obs_dim, act_dim, hid1_mult, hid3_size, sz_voc, embed_dim)
-        self.network = network 
-        self.scaler=  scaler
-
+        self.policy_model.built = True # to allow loading weights to a just initialized model
+        self.policy_model.load_weights(model_dir)
+        
     def sample(self, obs, x_t, stochastic=True):
         """
         obs: state

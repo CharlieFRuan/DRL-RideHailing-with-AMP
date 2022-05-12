@@ -94,6 +94,8 @@ class NNPolicy(tf.keras.Model):
 
         return output
 
+
+
 def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: Logger):
     """
     Policy Neural Network update using data from trajectories. 
