@@ -13,11 +13,12 @@ import tensorflow_probability as tfp
 import numpy as np
 from collections import OrderedDict
 import argparse
+import tensorflow as tf
 
 @ray.remote
 class Agent(object):
     
-    def __init__(self, network: Env, scaler: Scaler, hid1_mult, hid3_size, sz_voc, embed_dim, model_dir):
+    def __init__(self, network: Env, weights, scaler: Scaler, hid1_mult, hid3_size, sz_voc, embed_dim, model_dir, cur_iter):
         """
         network: transporation network, our environment
         scaler: for standardizing/normalizing values
@@ -27,11 +28,17 @@ class Agent(object):
         obs_dim = network.obs_dim
         act_dim = network.R * network.R
         self.policy_model = NNPolicy(obs_dim, act_dim, hid1_mult, hid3_size, sz_voc, embed_dim)
-        self.policy_model.built = True # to allow loading weights to a just initialized model
-        self.policy_model.load_weights(model_dir)
-        
-    def sample(self, obs, x_t, stochastic=True):
+
+        # dummy call to enable setting weights
+        if cur_iter > 1:
+            obs, x_t = self.network.get_initial_state()
+            obs = obs * 1.0
+            self.policy_model(tf.expand_dims(obs,0), tf.expand_dims(x_t,0)) 
+            self.policy_model.set_weights(weights)
+
+    def sample_distr(self, obs, x_t, stochastic=True):
         """
+        Return a distribution instead of an action because we may need to resample in run_episode
         obs: state
         x_t: time component
         stochastic: stochastic or deterministic policy
@@ -39,20 +46,19 @@ class Agent(object):
         """
         # TODO: implement deterministic, if needed
         if stochastic:
-            act_prob_out = self.policy_model(obs, x_t)
+            # expand dims because we only have 1 batch here; make shape (a,) into (1,a)
+            act_prob_out = self.policy_model(tf.expand_dims(obs,0), tf.expand_dims(x_t,0))
             dist = tfp.distributions.Categorical(act_prob_out)
-            action = dist.sample().numpy()[0]
-            return action
+            return dist
         else:
             raiseExceptions('Have not implemented deterministic yet.')
-
 
     def run_episode(self):
         """
         One episode simulation.
         Return: collected trajectories
         """
-        offset, scale = 0., 1.
+        offset, scale = 0.0, 1.0
         if self.scaler is not None:
             offset, scale = self.scaler.get()
         observes_unscaled, observes, times, actions, rewards = [], [], [], [], []
@@ -68,14 +74,14 @@ class Agent(object):
 
             while num_free_nby_cars > 0.5:  # cars' perspective
                 s_scaled = (s_running - offset) * scale
-                trip_type = self.sample(s_scaled, dec_epoch, stochastic=True)
+                trip_distr = self.sample_distr(s_scaled, dec_epoch, stochastic=True)
                 while True:  # resample until feasible action
+                    trip_type = trip_distr.sample().numpy()[0]
                     orig, dest = divmod(trip_type, self.network.R)
                     eta_w_car = np.where(s_running[self.network.car_dims_cum[orig]:\
                         (self.network.car_dims_cum[orig] + self.network.L + 1)] > 0.5)[0]
                     if len(eta_w_car) <= 0:
                         continue  # no free nearby car associated with this orig region -> resample
-
                     slot_id = self.network.min_to_slot(dec_epoch + eta_w_car[0])
                     # Collect state:
                     observes_unscaled.append(s_running.copy())  # because s_running will change
@@ -102,18 +108,17 @@ class Agent(object):
                     num_free_nby_cars -= 1  # processed one free nearby car
                     
                     break # s_running, dec_epoch is the post-decision state now
-            
             dec_epoch = self.network.get_next_state(s_running, dec_epoch)  # Passengers unattended leave!
             assert dec_epoch >= self.network.H or s_running[:self.network.car_dim].sum() == self.network.N, 'Car number problematic!'
 
         matching_rate = -1
         if len(self.network.queue) != 0:
-            matching_rate = float(sum(rewards)) / len(self.network.queue) * 100
+            matching_rate = sum(rewards) * 100.0 / len(self.network.queue) 
 
         trajectory = OrderedDict([('state', observes_unscaled), ('state_scaled', observes), \
-            ('state_time', times), ('action', actions), ('reward', rewards), \
+            ('state_time', np.array(times)), ('action', actions), ('reward', rewards), \
             ('number_passengers', len(self.network.queue)), ('matching_rate', matching_rate)])
-        
+
         print('Car-passenger matching rate: {:.2f}%...'.format(trajectory['matching_rate']))
 
         return trajectory

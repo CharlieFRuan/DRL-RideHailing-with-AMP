@@ -94,6 +94,17 @@ class NNPolicy(tf.keras.Model):
 
         return output
 
+    # def get_weights(self):
+    #     """
+    #     Return a list of weights, ordered by call's order
+    #     """
+    #     # weights = []
+    #     # weights.append(self.embed_layer.get_weights())
+    #     # weights.append(self.hidden_layer1.get_weights())
+    #     # weights.append(self.hidden_layer2.get_weights())
+    #     # weights.append(self.hidden_layer3.get_weights())
+    #     # weights.append(self.act_prob_output_layer.get_weights())
+    #     # return weights
 
 
 def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: Logger):
@@ -135,7 +146,6 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
             gradients = tape.gradient(loss, model_params)
             optimizer.apply_gradients(zip(gradients, model_params))
     
-    print(loss)
     logger.log({'PolicyLoss': loss,
                 'Clipping': model.clipping_range,
                 '_lr_multiplier': model.lr_multiplier})

@@ -18,11 +18,11 @@ class Scaler(object):
         # epsilon = max(min(mean_std['std'].min(), .1), 1e-4)
         # self.scale = 1. / (mean_std['std'].values + epsilon) / 3.
         # del mean_std
-        self.offset = 0
-        self.scale = 1
+        self.offset = 0.0
+        self.scale = 1.0
 
     def get(self):
-        return self.scale, self.offset
+        return self.offset, self.scale
 
 
 def main():

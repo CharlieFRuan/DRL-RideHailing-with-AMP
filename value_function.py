@@ -131,7 +131,6 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger):
                 optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
     logger.log({'ValFuncLoss': loss})  # loss from last epoch
-    print(loss)
 
 def test():
     now = datetime.datetime.utcnow().strftime("%b-%d_%H-%M-%S")  # create unique directories
@@ -143,7 +142,22 @@ def test():
     dummy_x_t = tf.cast(np.resize(np.arange(3), (3,1)), tf.float32)
     dummy_y = tf.cast(np.resize(np.arange(3), (3,1)), tf.float32)
 
+    outcome_0 = val_func_model(dummy_x, dummy_x_t, training=False)
     fit_valueNN(val_func_model, dummy_x, dummy_x_t, dummy_y, logger)
+    outcome_1 = val_func_model(dummy_x, dummy_x_t, training=False)
+
+    saved_weights = val_func_model.get_weights()
+    val_func_model_copy = NNValueFunction(obs_dim=400, hid1_mult=1, hid3_size=5, sz_voc=360, embed_dim=6, train_epoch=10, reg_str=5e-3)
+    outcome_2 = val_func_model_copy(dummy_x, dummy_x_t, training=False)
+    val_func_model_copy.set_weights(saved_weights)
+    outcome_3 = val_func_model_copy(dummy_x, dummy_x_t, training=False)
+    # We should expect outcome_3 to be the same as outcome_1 since we set the weights
+    # outcome_2 is more likely to be different from outcome_0 because weights are initialized randomly
+
+    print(outcome_0)
+    print(outcome_1)
+    print(outcome_2)
+    print(outcome_3)
 
 if __name__ == '__main__':
     test()

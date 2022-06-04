@@ -1,5 +1,4 @@
 # ML-related libraries
-from socket import AI_PASSIVE
 import string
 import ray
 import tensorflow as tf
@@ -16,6 +15,8 @@ from agent import Agent
 # python libraries
 import argparse
 import datetime
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress TF's log
 
 MAX_ACTORS = 2 # max number of parallel simulations
 
@@ -38,8 +39,10 @@ def run_policy(network_id, policy: NNPolicy, scaler, logger, gamma, cur_iter, ep
     # save weights of current policy NN; loaded in agent initialization
     scaler_id = ray.put(scaler)
     policy.save_weights(policy_temp_save_dir) 
-    simulators = [Agent.remote(network=ray.get(network_id), scaler=ray.get(scaler_id), hid1_mult=1, hid3_size=5, \
-        sz_voc=360, embed_dim=ray.get(network_id).num_slots*2, model_dir=policy_temp_save_dir) for _ in range(MAX_ACTORS)] 
+    weight_id = ray.put(policy.get_weights())
+
+    simulators = [Agent.remote(network=ray.get(network_id), weights=ray.get(weight_id), scaler=ray.get(scaler_id), hid1_mult=1, hid3_size=5, \
+        sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, model_dir=policy_temp_save_dir, cur_iter=cur_iter) for _ in range(MAX_ACTORS)] 
     run_iterations = episodes // MAX_ACTORS # do not run more parallel processes than number of cores
     remainder = episodes - run_iterations * MAX_ACTORS
 
@@ -115,7 +118,7 @@ def add_disc_sum_rew(trajectories, gamma, scaler, cur_iter):
     disc_sum_rew = np.concatenate([t['disc_sum_rew'][:-burn] for t in trajectories])
     state_times = np.concatenate([t['state_time'][:-burn] for t in trajectories]) 
 
-    scale, offset = scaler.get()
+    offset, scale = scaler.get()
     observes = (unscaled_obs - offset) * scale
     disc_sum_rew_norm = (disc_sum_rew - offset) * scale
     if cur_iter ==1:
@@ -133,9 +136,9 @@ def add_value(trajectories, val_func: NNValueFunction, scaler):
     :param scaler: normalization values
     """
     start_time = datetime.datetime.now()
-    scale, offset = scaler.get()
+    offset, scale = scaler.get()
     for trajectory in trajectories:
-        values = val_func.predict(trajectory['state_scaled'], trajectory['state_time'])
+        values = val_func(trajectory['state_scaled'], trajectory['state_time'])
         trajectory['values'] = values / scale + offset
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0
@@ -151,7 +154,7 @@ def build_train_set(trajectories, gamma, scaler):
     """
 
     for trajectory in trajectories:
-        values = trajectory['values']
+        values = np.squeeze(trajectory['values'])
         unscaled_obs = trajectory['state'] 
         advantages = trajectory['reward'] - values + gamma * np.append(values[1:], values[-1])
         trajectory['advantages'] = np.asarray(advantages)
@@ -162,7 +165,7 @@ def build_train_set(trajectories, gamma, scaler):
     unscaled_obs = np.concatenate([t['state'][:-burn] for t in trajectories])
     disc_sum_rew = np.concatenate([t['disc_sum_rew'][:-burn] for t in trajectories])
 
-    scale, offset = scaler.get()
+    offset, scale = scaler.get()
     actions = np.concatenate([t['action'][:-burn] for t in trajectories])
     advantages = np.concatenate([t['advantages'][:-burn] for t in trajectories])
     observes = (unscaled_obs - offset) * scale 
@@ -192,7 +195,7 @@ def log_batch_stats(observes, actions, advantages, disc_sum_rew, logger, episode
                 })
 
 
-def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, episode_duration,
+def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size, episode_duration,
          clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir):
     """
     # Main training loop
@@ -203,11 +206,13 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
     logger = Logger(logname=ray.get(network_id).network_name, now=now, time_start=time_start)
 
     scaler = Scaler() # TODO: scaler is a dummy for now
-    val_func = NNValueFunction(obs_dim=ray.get(network_id).obs_dim, hid1_mult=1, hid3_size=5, \
-        sz_voc=360, embed_dim=6, train_epoch=valNN_train_epoch) # Value Neural Network initialization
+    # Value Neural Network initialization
+    val_func = NNValueFunction(obs_dim=ray.get(network_id).obs_dim, hid1_mult=hid1_mult, hid3_size=hid3_size, \
+        sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, train_epoch=valNN_train_epoch) 
+    # The main Policy Neural Network
     policy = NNPolicy(obs_dim=ray.get(network_id).obs_dim, act_dim=ray.get(network_id).R * ray.get(network_id).R,\
-        hid1_mult=1, hid3_size=5, sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, \
-        train_epoch=policyNN_train_epoch, reg_str=5e-3, temp=2.)
+        hid1_mult=hid1_mult, hid3_size=hid3_size, sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, \
+        train_epoch=policyNN_train_epoch, reg_str=5e-3, temp=2.0)
     
     iteration = 0  # count of policy iterations
     weights_set = []
@@ -221,7 +226,7 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
         policy.lr_multiplier = max(0.05, alpha)
 
         # Use parallel agent to rollout episodes
-        trajectories = run_policy(network_id, policy, scaler, logger, gamma, iteration, batch_size, policy_temp_save_dir) 
+        trajectories = run_policy(network_id, policy, scaler, logger, gamma, iteration, batch_size, policy_temp_save_dir)
         # Calculate value function for each state in each trajectory
         observes, disc_sum_rew_norm, state_times = add_disc_sum_rew(trajectories, gamma, scaler, iteration)
         # Update value NN with new data
@@ -246,6 +251,7 @@ if __name__ == "__main__":
     network = Env()
     network_id = ray.put(network)
     tf.random.set_seed(1)
+    np.random.seed(1)
 
     parser = argparse.ArgumentParser(description=('Train policy for a transportation network '
                                                   'using Proximal Policy Optimizer'))
@@ -259,8 +265,10 @@ if __name__ == "__main__":
                         default = 0.003)
     parser.add_argument('-b', '--batch_size', type=int, help='Number of episodes per training batch',
                         default = 50) # K=300 in paper? (Charlie 5/3/22)
-    parser.add_argument('-m', '--hid1_mult', type=int, help='Size of first hidden layer for value and policy NNs',
+    parser.add_argument('-m', '--hid1_mult', type=int, help='Multiplier for size of first hidden layer for value and policy NNs',
                         default = 1)
+    parser.add_argument('--hid3_size', type=int, help='Size of third hidden layer for value and policy NNs',
+                        default = 5)
     parser.add_argument('-t', '--episode_duration', type=int, help='Number of time-steps per an episode',
                         # default = 360)
                         default = 60)
@@ -276,4 +284,6 @@ if __name__ == "__main__":
                         default = './policyNN_temp_save/policy_temp.h5')
     args = parser.parse_args()
 
+    print('Starting')
+    # main(network_id,  args)
     main(network_id,  **vars(args))

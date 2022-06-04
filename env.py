@@ -211,7 +211,7 @@ class Env(object):
             for reg in range(self.R):
                 s_post[self.car_dims_cum[reg + 1] - 1] = 0
         else:  # next_dec_epoch == self.H
-            s_post[:] = np.nan  # terminal state
+            s_post[:] = -1  # terminal state
 
         return next_dec_epoch
 
