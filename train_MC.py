@@ -256,7 +256,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=('Train policy for a transportation network '
                                                   'using Proximal Policy Optimizer'))
     parser.add_argument('-n', '--num_policy_iterations', type=int, help='Number of policy iterations to run',
-                        default = 200)
+                        default = 75)
     parser.add_argument('-g', '--gamma', type=float, help='Discount factor',
                         default = 1)
     parser.add_argument('-l', '--lam', type=float, help='Lambda for Generalized Advantage Estimation',
@@ -264,14 +264,15 @@ if __name__ == "__main__":
     parser.add_argument('-k', '--kl_targ', type=float, help='D_KL target value',
                         default = 0.003)
     parser.add_argument('-b', '--batch_size', type=int, help='Number of episodes per training batch',
-                        default = 50) # K=300 in paper? (Charlie 5/3/22)
+                        default = 50)
+                        # default = 300) # Actual scale
     parser.add_argument('-m', '--hid1_mult', type=int, help='Multiplier for size of first hidden layer for value and policy NNs',
                         default = 1)
     parser.add_argument('--hid3_size', type=int, help='Size of third hidden layer for value and policy NNs',
                         default = 5)
     parser.add_argument('-t', '--episode_duration', type=int, help='Number of time-steps per an episode',
                         # default = 360)
-                        default = 60)
+                        default = 360)
     parser.add_argument('-c', '--clipping_parameter', type=float, help='Initial clipping parameter',
                         default = 0.2)
     # parser.add_argument('-s', '--skipping_steps', type=int, help='Number of steps for which control is fixed',

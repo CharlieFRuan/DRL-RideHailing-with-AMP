@@ -11,6 +11,14 @@ class Env(object):
     num_slots = 3
     len_slot = 120  # in minute
 
+    # Actual scale below
+    # R = 5  # number of regions
+    # N = 1000  # number of cars
+    # H = 360  # horizon in minute
+    # num_slots = 3
+    # len_slot = 120  # in minute
+
+
     # Passenger arrival rate (number per minute)
     # This decides the car initial distribution
     # in paper, it is number of passenger arrivals at region o in a minute (here we scale by car)

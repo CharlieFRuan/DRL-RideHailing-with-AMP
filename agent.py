@@ -119,7 +119,7 @@ class Agent(object):
             ('state_time', np.array(times)), ('action', actions), ('reward', rewards), \
             ('number_passengers', len(self.network.queue)), ('matching_rate', matching_rate)])
 
-        print('Car-passenger matching rate: {:.2f}%...'.format(trajectory['matching_rate']))
+        # print('Car-passenger matching rate: {:.2f}%...'.format(trajectory['matching_rate']))
 
         return trajectory
 
