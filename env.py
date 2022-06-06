@@ -11,7 +11,7 @@ class Env(object):
     num_slots = 3
     len_slot = 120  # in minute
 
-    # Actual scale below
+    # # Actual scale below
     # R = 5  # number of regions
     # N = 1000  # number of cars
     # H = 360  # horizon in minute
@@ -227,6 +227,7 @@ class Env(object):
 def test():
     env = Env()
     print('Number impossible ride request type: \n', env.num_imp_ride)
+    print('Car dim: \n', env.car_dim)
     print('State vector dimension: \n', env.obs_dim)
     print()
     s_cp_init, s_t_init = env.get_initial_state()
