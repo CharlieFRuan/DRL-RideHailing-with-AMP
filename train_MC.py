@@ -18,7 +18,7 @@ import datetime
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress TF's log
 
-MAX_ACTORS = 2 # max number of parallel simulations
+MAX_ACTORS = 30 # max number of parallel simulations
 
 
 def run_policy(network_id, policy: NNPolicy, scaler, logger, gamma, cur_iter, episodes, \
@@ -195,7 +195,7 @@ def log_batch_stats(observes, actions, advantages, disc_sum_rew, logger, episode
                 })
 
 
-def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size, episode_duration,
+def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size,
          clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir):
     """
     # Main training loop
@@ -264,15 +264,12 @@ if __name__ == "__main__":
     parser.add_argument('-k', '--kl_targ', type=float, help='D_KL target value',
                         default = 0.003)
     parser.add_argument('-b', '--batch_size', type=int, help='Number of episodes per training batch',
-                        default = 50)
-                        # default = 300) # Actual scale
+                        # default = 50)
+                        default = 300) # Actual scale
     parser.add_argument('-m', '--hid1_mult', type=int, help='Multiplier for size of first hidden layer for value and policy NNs',
                         default = 1)
     parser.add_argument('--hid3_size', type=int, help='Size of third hidden layer for value and policy NNs',
                         default = 5)
-    parser.add_argument('-t', '--episode_duration', type=int, help='Number of time-steps per an episode',
-                        # default = 360)
-                        default = 360)
     parser.add_argument('-c', '--clipping_parameter', type=float, help='Initial clipping parameter',
                         default = 0.2)
     # parser.add_argument('-s', '--skipping_steps', type=int, help='Number of steps for which control is fixed',
