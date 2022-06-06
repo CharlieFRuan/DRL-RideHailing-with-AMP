@@ -18,7 +18,7 @@ import datetime
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress TF's log
 
-MAX_ACTORS = 2 # max number of parallel simulations
+MAX_ACTORS = 30 # max number of parallel simulations
 
 
 def run_policy(network_id, policy: NNPolicy, scaler, logger, gamma, cur_iter, episodes, \
@@ -278,8 +278,8 @@ if __name__ == "__main__":
     parser.add_argument('-k', '--kl_targ', type=float, help='D_KL target value',
                         default = 0.003)
     parser.add_argument('-b', '--batch_size', type=int, help='Number of episodes per training batch',
-                        default = 2)
-                        # default = 300) # Actual scale
+                        # default = 50)
+                        default = 300) # Actual scale
     parser.add_argument('-m', '--hid1_mult', type=int, help='Multiplier for size of first hidden layer for value and policy NNs',
                         default = 1)
     parser.add_argument('--hid3_size', type=int, help='Size of third hidden layer for value and policy NNs',
