@@ -150,14 +150,19 @@ def build_train_set(trajectories, gamma, scaler):
     Data pre-processing for training
     trajectory_whole:  simulated data
     scaler: normalization values
-    return: data for further Policy and Value neural networks training
+    return: data for further Policy and Value neural networks training; also calculate average 
+    matching rate, since we are already iterating through all the trajectories
     """
-
+    valid_matching_rates = [] # does this to not include rates that are -1 (no ride at all)
+        
     for trajectory in trajectories:
         values = np.squeeze(trajectory['values'])
         unscaled_obs = trajectory['state'] 
         advantages = trajectory['reward'] - values + gamma * np.append(values[1:], values[-1])
         trajectory['advantages'] = np.asarray(advantages)
+        rate = trajectory['matching_rate']
+        if rate > 0:
+            valid_matching_rates.append(rate)
 
     start_time = datetime.datetime.now()
     burn = 1 # do not want last state in trajectory
@@ -171,14 +176,19 @@ def build_train_set(trajectories, gamma, scaler):
     observes = (unscaled_obs - offset) * scale 
     advantages = advantages  / (advantages.std() + 1e-6) # normalize advantages
 
+    # Now caculate average matching rate
+    avg_matching_rate = 0 # 0 if there is no valid rate at all
+    if len(valid_matching_rates) != 0:
+        avg_matching_rate = np.mean(valid_matching_rates)
+
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0
     print('build_train_set took: %.2f mins' %(time_took))
-    return observes,  actions, advantages, disc_sum_rew
+
+    return observes,  actions, advantages, disc_sum_rew, avg_matching_rate
 
 
-def log_batch_stats(observes, actions, advantages, disc_sum_rew, logger, episode):
-    # metadata tracking
+def log_batch_stats(trajectories, observes, actions, advantages, disc_sum_rew, logger: Logger, episode, avg_matching_rate, is_last_iteration):
 
     time_total = datetime.datetime.now() - logger.time_start
     logger.log({'_mean_act': np.mean(actions),
@@ -193,6 +203,7 @@ def log_batch_stats(observes, actions, advantages, disc_sum_rew, logger, episode
                 '_Episode': episode,
                 '_time_from_beginning_in_minutes': int((time_total.total_seconds() / 60) * 100) / 100.
                 })
+    logger.log_matching_rate(avg_matching_rate, is_last_iteration)
 
 
 def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size,
@@ -234,9 +245,9 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
         # Add estimated values to episodes using updated value NN
         add_value(trajectories, val_func, scaler)  
         # Prepare input for updating policy NN
-        observes, actions, advantages, disc_sum_rew = build_train_set(trajectories, gamma, scaler)
+        observes, actions, advantages, disc_sum_rew, avg_matching_rate = build_train_set(trajectories, gamma, scaler)
         # Log statistics
-        log_batch_stats(observes, actions, advantages, disc_sum_rew, logger, iteration)
+        log_batch_stats(trajectories, observes, actions, advantages, disc_sum_rew, logger, iteration, avg_matching_rate, iteration==num_policy_iterations)
         # Update Policy NN
         updatePolicy(policy, observes, state_times, actions, np.squeeze(advantages), logger)
 
@@ -244,7 +255,6 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
         print('Finished iteration {}/{}'.format(iteration, num_policy_iterations))
     
         # TODO: save log, weights, and models
-        # TODO: plot average rewards over time
 
 
 if __name__ == "__main__":
@@ -256,7 +266,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=('Train policy for a transportation network '
                                                   'using Proximal Policy Optimizer'))
     parser.add_argument('-n', '--num_policy_iterations', type=int, help='Number of policy iterations to run',
-                        default = 75)
+                        default = 10)
     parser.add_argument('-g', '--gamma', type=float, help='Discount factor',
                         default = 1)
     parser.add_argument('-l', '--lam', type=float, help='Lambda for Generalized Advantage Estimation',

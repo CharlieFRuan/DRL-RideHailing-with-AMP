@@ -5,6 +5,7 @@ import sys
 class Env(object):
     """ The transportation network. """
     network_name = 'transportation_network' # Charlie 5/3/22 to make the code run
+    
     # R = 5  # number of regions
     # N = 10  # number of cars
     # H = 10  # horizon in minute (10 now for testing?)
@@ -227,6 +228,7 @@ class Env(object):
 def test():
     env = Env()
     print('Number impossible ride request type: \n', env.num_imp_ride)
+    print('Car dim: \n', env.car_dim)
     print('State vector dimension: \n', env.obs_dim)
     print()
     s_cp_init, s_t_init = env.get_initial_state()
