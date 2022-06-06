@@ -104,6 +104,7 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger):
         y: label, the approximated value for the given input
         logger: logger class to save training loss and other stats
     """
+    start_time = datetime.datetime.now()
     # 1. concatenate current data with previous data, and update the replay buffer
     x_train, x_t_train, y_train = None, None, None
     if model.replay_buffer_x is None:
@@ -131,6 +132,9 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger):
                 optimizer.apply_gradients(zip(gradients, model.trainable_variables))
 
     logger.log({'ValFuncLoss': loss})  # loss from last epoch
+    end_time = datetime.datetime.now()
+    time_took = (end_time - start_time).total_seconds() / 60.0
+    print('fit_valueNN took: %.2f mins' %(time_took))
 
 def test():
     now = datetime.datetime.utcnow().strftime("%b-%d_%H-%M-%S")  # create unique directories

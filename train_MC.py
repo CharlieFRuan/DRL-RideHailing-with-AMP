@@ -230,6 +230,7 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
     scaler_set = []
 
     while iteration < num_policy_iterations:
+        start_time = datetime.datetime.now()
         # decrease clipping_range and learning rate
         iteration += 1
         alpha = 1. - iteration / num_policy_iterations
@@ -252,7 +253,10 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
         updatePolicy(policy, observes, state_times, actions, np.squeeze(advantages), logger)
 
         logger.write(display=True)  # write logger results to file and stdout
+        end_time = datetime.datetime.now()
+        time_took = (end_time - start_time).total_seconds() / 60.0
         print('Finished iteration {}/{}'.format(iteration, num_policy_iterations))
+        print('This iteration took %.2f minutes' %(time_took))
     
         # TODO: save log, weights, and models
 

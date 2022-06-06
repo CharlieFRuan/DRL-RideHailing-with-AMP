@@ -117,6 +117,7 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
     :param advantages: estimation of antantage function at observed states
     :param logger: statistics accumulator
     """
+    start_time = datetime.datetime.now()
     # 1. get the probability to take the same actions (from the trajectories) with the current policy
     old_act_output = model(observes, times)
     old_distr = tfp.distributions.Categorical(old_act_output)
@@ -149,6 +150,10 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
     logger.log({'PolicyLoss': loss,
                 'Clipping': model.clipping_range,
                 '_lr_multiplier': model.lr_multiplier})
+    
+    end_time = datetime.datetime.now()
+    time_took = (end_time - start_time).total_seconds() / 60.0
+    print('updatePolicy took: %.2f mins' %(time_took))
 
 
 def test():
