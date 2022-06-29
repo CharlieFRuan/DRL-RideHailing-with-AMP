@@ -40,7 +40,7 @@ class NNValueFunction(tf.keras.Model):
         self.reg_str = reg_str
         self.epochs = train_epoch
         self.lr = 1e-4 
-        self.batch_size = 128
+        self.batch_size = 2048
         
         # used to store previous step input
         self.replay_buffer_x = None
@@ -120,8 +120,10 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger):
     # 2. prepare loss, optimizer, and dataloader
     optimizer = tf.keras.optimizers.Adam(model.lr) #TODO: see what to do with learning rate
     # TODO: make sure len(x_train) gives the actual size
+    print("len(x_train): ", len(x_train))
     dataloader = tf.data.Dataset.from_tensor_slices((x_train, x_t_train, \
         y_train)).shuffle(x_train.shape[0]).batch(model.batch_size)
+    print("len(dataloader): ", len(dataloader))
 
     for e in range(model.epochs):
         for x_train_i, x_t_train_i, y_train_i in dataloader:

@@ -33,11 +33,12 @@ class Logger(object):
         self.matching_rates.append(avg_matching_rate)
         if is_last_iteration:
             total_iter = len(self.matching_rates)
-            plt.plot(self.matching_rates)
-            plt.bar(np.arange(total_iter), self.matching_rates, width=0.1)
-            plt.xticks(np.arange(total_iter))
+            f, ax = plt.subplots(1, figsize=(10, 10))
+            plt.bar(np.arange(total_iter) + 1, self.matching_rates)
+            plt.xticks(np.insert(np.arange(5, total_iter+1, 5), 0, 1))
             plt.xlabel('Iteration')
             plt.ylabel('Average Matching Rate over All Agents')
+            plt.title('Matching Rate over Iterations')
             plt.savefig(self.plot_directory + "matching_rate_over_iterations.png", dpi=200)
             plt.clf()
             
