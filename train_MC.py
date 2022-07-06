@@ -61,7 +61,6 @@ def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, 
     print('simulation took: %.2f mins' %(sim_time))
 
     # 3. Post-process simulation result
-    # TODO: normalize states using scaler
     average_reward = np.mean(np.concatenate([t['reward'] for t in trajectories]))
     print('Average cost: ',  -average_reward)
 
@@ -162,22 +161,15 @@ def add_disc_sum_rew_AMP(trajectories, scaler, cur_iter, H):
     # 2. Postprocess
     # Burn the last car of each entire episode, also combine all episodes' data into one giant array
     burn = 1 # we do not want the last state and reward for the episode (the entire day)
-    unscaled_obs = np.concatenate([t['state'][:-burn] for t in trajectories])
+
     disc_sum_rew = np.concatenate([t['disc_sum_rew'][:-burn] for t in trajectories])
     state_times = np.concatenate([t['state_time'][:-burn] for t in trajectories]) 
+    observes = np.concatenate([t['state_scaled'][:-burn] for t in trajectories])
 
-    offset, scale = scaler.get()
-    observes = (unscaled_obs - offset) * scale
-    disc_sum_rew_norm = (disc_sum_rew - offset) * scale
-    if cur_iter ==1:
-        for t in trajectories:
-            # If it is the first ever episode, we scale it now; 
-            # for other iterations, it is scaled during run_episode
-            # Guessing it is because first iteration needs to wait for all episodes finish to 
-            # calculate offset and scale?
-            t['state_scaled'] = (np.array(t['state']) - offset) * scale
+    # TODO: scale disc_sum_rew
+    # return observes, disc_sum_rew_norm, state_times 
 
-    return observes, disc_sum_rew_norm, state_times 
+    return observes, disc_sum_rew, state_times 
 
 
 def add_disc_sum_rew(trajectories, gamma, scaler, cur_iter):
@@ -204,22 +196,17 @@ def add_disc_sum_rew(trajectories, gamma, scaler, cur_iter):
     # 2. Postprocess
     # Burn the last car of each entire episode, also combine all episodes' data into one giant array
     burn = 1 # we do not want the last state and reward for the episode (the entire day)
-    unscaled_obs = np.concatenate([t['state'][:-burn] for t in trajectories])
+    # unscaled_obs = np.concatenate([t['state'][:-burn] for t in trajectories])
     disc_sum_rew = np.concatenate([t['disc_sum_rew'][:-burn] for t in trajectories])
     state_times = np.concatenate([t['state_time'][:-burn] for t in trajectories]) 
+    observes = np.concatenate([t['state_scaled'][:-burn] for t in trajectories])
+    if scaler.method == 'recording':
+        scaler.build_csv(observes)
 
-    offset, scale = scaler.get()
-    observes = (unscaled_obs - offset) * scale
-    disc_sum_rew_norm = (disc_sum_rew - offset) * scale
-    if cur_iter ==1:
-        for t in trajectories:
-            # If it is the first ever episode, we scale it now; 
-            # for other iterations, it is scaled during run_episode
-            # Guessing it is because first iteration needs to wait for all episodes finish to 
-            # calculate offset and scale?
-            t['state_scaled'] = (np.array(t['state']) - offset) * scale
+    # TODO: scale disc_sum_rew
+    # return observes, disc_sum_rew_norm, state_times 
 
-    return observes, disc_sum_rew_norm, state_times 
+    return observes, disc_sum_rew, state_times 
 
 
 def add_value(trajectories, val_func: NNValueFunction, scaler):
@@ -230,10 +217,11 @@ def add_value(trajectories, val_func: NNValueFunction, scaler):
     :param scaler: normalization values
     """
     start_time = datetime.datetime.now()
-    offset, scale = scaler.get()
+    # offset, scale = scaler.get()
     for trajectory in trajectories:
         values = val_func(trajectory['state_scaled'], trajectory['state_time'])
-        trajectory['values'] = values / scale + offset
+        trajectory['values'] = values 
+        # trajectory['values'] = values / scale + offset # TODO: scale values? Same as disc_sum_rew
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0
     print('add_value took: %.2f mins' %(time_took))
@@ -264,13 +252,14 @@ def build_train_set(trajectories, gamma, scaler):
     start_time = datetime.datetime.now()
     burn = 1 # do not want last state in trajectory (last car of the entire day)
 
-    unscaled_obs = np.concatenate([t['state'][:-burn] for t in trajectories])
+    # unscaled_obs = np.concatenate([t['state'][:-burn] for t in trajectories])
+    observes = np.concatenate([t['state_scaled'][:-burn] for t in trajectories])
     disc_sum_rew = np.concatenate([t['disc_sum_rew'][:-burn] for t in trajectories])
 
-    offset, scale = scaler.get()
+    # offset, scale = scaler.get()
     actions = np.concatenate([t['action'][:-burn] for t in trajectories])
     advantages = np.concatenate([t['advantages'][:-burn] for t in trajectories])
-    observes = (unscaled_obs - offset) * scale 
+    # observes = (unscaled_obs - offset) * scale 
     advantages = advantages  / (advantages.std() + 1e-6) # normalize advantages
 
     # Now caculate average matching rate
@@ -304,7 +293,7 @@ def log_batch_stats(trajectories, observes, actions, advantages, disc_sum_rew, l
 
 
 def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size,
-         clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir, use_AMP):
+         clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir, use_AMP, scale_method):
     """
     # Main training loop
     :param: see ArgumentParser below
@@ -313,7 +302,7 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
     time_start= datetime.datetime.now()
     logger = Logger(logname=ray.get(network_id).network_name, now=now, time_start=time_start)
 
-    scaler = Scaler() # TODO: scaler is a dummy for now
+    scaler = Scaler(scale_method) 
     # Value Neural Network initialization
     val_func = NNValueFunction(obs_dim=ray.get(network_id).obs_dim, hid1_mult=hid1_mult, hid3_size=hid3_size, \
         sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, train_epoch=valNN_train_epoch) 
@@ -336,7 +325,7 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
 
         # Use parallel agent to rollout episodes
         trajectories = run_policy(network_id, policy, val_func, scaler, logger, gamma, iteration, batch_size, policy_temp_save_dir, valNN_train_epoch, use_AMP)
-        # trajectories = run_policy_test(network_id, policy, scaler, logger, gamma, iteration, batch_size, policy_temp_save_dir)
+        
         # Calculate value function for each state in each trajectory (step 3.5 in paper; i.e. calculate one-rep estimation of V for each state)
         if use_AMP:
             add_value(trajectories, val_func, scaler) # first use ValNN from i-1 to calculate value, prepare for AMP
@@ -374,7 +363,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=('Train policy for a transportation network '
                                                   'using Proximal Policy Optimizer'))
     parser.add_argument('-n', '--num_policy_iterations', type=int, help='Number of policy iterations to run',
-                        default = 5)
+                        default = 2)
     parser.add_argument('-g', '--gamma', type=float, help='Discount factor',
                         default = 1)
     parser.add_argument('-l', '--lam', type=float, help='Lambda for Generalized Advantage Estimation',
@@ -399,6 +388,8 @@ if __name__ == "__main__":
     parser.add_argument('--policy_temp_save_dir', type=str, help='Directory to save and load policy NN each iteration',
                         default = './policyNN_temp_save/policy_temp.h5')
     parser.add_argument('--use_AMP', action='store_true', help='flag to run using AMP estimator')
+    parser.add_argument('--scale_method', type=str, help='Method of getting scaler',
+                        default = 'zero_one')
     args = parser.parse_args()
 
     print('Starting')
