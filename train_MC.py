@@ -302,7 +302,7 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
     time_start= datetime.datetime.now()
     logger = Logger(logname=ray.get(network_id).network_name, now=now, time_start=time_start)
 
-    scaler = Scaler(scale_method) 
+    scaler = Scaler(ray.get(network_id).obs_dim, scale_method) 
     # Value Neural Network initialization
     val_func = NNValueFunction(obs_dim=ray.get(network_id).obs_dim, hid1_mult=hid1_mult, hid3_size=hid3_size, \
         sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, train_epoch=valNN_train_epoch) 
@@ -362,7 +362,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=('Train policy for a transportation network '
                                                   'using Proximal Policy Optimizer'))
     parser.add_argument('-n', '--num_policy_iterations', type=int, help='Number of policy iterations to run',
-                        default = 2)
+                        default = 5)
     parser.add_argument('-g', '--gamma', type=float, help='Discount factor',
                         default = 1)
     parser.add_argument('-l', '--lam', type=float, help='Lambda for Generalized Advantage Estimation',
@@ -371,7 +371,7 @@ if __name__ == "__main__":
                         default = 0.003)
     parser.add_argument('-b', '--batch_size', type=int, help='Number of episodes per training batch',
                         # default = 300)
-                        default = 2)
+                        default = 5)
     parser.add_argument('-m', '--hid1_mult', type=int, help='Multiplier for size of first hidden layer for value and policy NNs',
                         default = 1)
     parser.add_argument('--hid3_size', type=int, help='Size of third hidden layer for value and policy NNs',
