@@ -16,7 +16,7 @@ class Scaler(object):
         scale = 1 / (stddev + 0.1) / 3 (i.e. 3x stddev = +/- 1.0)
     """
 
-    def __init__(self, method):
+    def __init__(self, obs_dim, method):
         """
         Args:
             method: 
@@ -26,6 +26,7 @@ class Scaler(object):
                 'read_in': use given file to load mean and variance
         """
         self.method = method
+        self.obs_dim = obs_dim
         self.scale = None
         self.offset = None
 
