@@ -126,6 +126,7 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
     optimizer = tf.keras.optimizers.Adam(model.lr)
 
     # 2. Train
+    loss = 0
     for e in range(model.train_epoch):
         with tf.GradientTape() as tape:
             #TODO: see if tf.convert_to_tensor is needed
@@ -147,9 +148,10 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
             gradients = tape.gradient(loss, model_params)
             optimizer.apply_gradients(zip(gradients, model_params))
     
-    logger.log({'PolicyLoss': loss,
-                'Clipping': model.clipping_range,
-                '_lr_multiplier': model.lr_multiplier})
+    # logger.log({'PolicyLoss': loss,
+    #             'Clipping': model.clipping_range,
+    #             '_lr_multiplier': model.lr_multiplier})
+    logger.log('policyNNLoss', tf.reduce_mean(loss).numpy())  # loss from last epoch
     
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0

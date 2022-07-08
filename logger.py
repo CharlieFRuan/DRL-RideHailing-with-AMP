@@ -1,6 +1,8 @@
 import logging
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
+import time
 
 """
 Created by Charlie 5/3/22, just for a placeholder so that the file can run.
@@ -15,6 +17,9 @@ class Logger(object):
         self.path_weights = 'path_weights/'
         self.plot_directory = 'plot_output/'
         self.matching_rates = []
+        self.metric_dict = {'valNNLoss': [], 
+                            'policyNNLoss': [],
+                            'matching_rates': []}
     
     def write(self, display):
         pass
@@ -22,8 +27,8 @@ class Logger(object):
     def close(self):
         pass
 
-    def log(self, input_dict):
-        pass
+    def log(self, metric_name, metric_val):
+        self.metric_dict[metric_name].append(metric_val)
 
     def log_matching_rate(self, avg_matching_rate, is_last_iteration):
         """
@@ -41,4 +46,11 @@ class Logger(object):
             plt.title('Matching Rate over Iterations')
             plt.savefig(self.plot_directory + "matching_rate_over_iterations.png", dpi=200)
             plt.clf()
+    
+    def output_to_csv(self):
+        df = pd.DataFrame()
+        df['valNNLoss'] = self.metric_dict['valNNLoss']
+        df['policyNNLoss'] = self.metric_dict['policyNNLoss']
+        df['matching_rates'] = self.metric_dict['matching_rates']
+        df.to_csv('./metrics_log/metrics_' + time.strftime("%Y%m%d-%H%M%S") + '.csv')
             

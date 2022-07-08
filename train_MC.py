@@ -277,19 +277,20 @@ def build_train_set(trajectories, gamma, scaler):
 def log_batch_stats(trajectories, observes, actions, advantages, disc_sum_rew, logger: Logger, episode, avg_matching_rate, is_last_iteration):
 
     time_total = datetime.datetime.now() - logger.time_start
-    logger.log({'_mean_act': np.mean(actions),
-                '_mean_adv': np.mean(advantages),
-                '_min_adv': np.min(advantages),
-                '_max_adv': np.max(advantages),
-                '_std_adv': np.var(advantages),
-                '_mean_discrew': np.mean(disc_sum_rew),
-                '_min_discrew': np.min(disc_sum_rew),
-                '_max_discrew': np.max(disc_sum_rew),
-                '_std_discrew': np.var(disc_sum_rew),
-                '_Episode': episode,
-                '_time_from_beginning_in_minutes': int((time_total.total_seconds() / 60) * 100) / 100.
-                })
+    # logger.log({'_mean_act': np.mean(actions),
+    #             '_mean_adv': np.mean(advantages),
+    #             '_min_adv': np.min(advantages),
+    #             '_max_adv': np.max(advantages),
+    #             '_std_adv': np.var(advantages),
+    #             '_mean_discrew': np.mean(disc_sum_rew),
+    #             '_min_discrew': np.min(disc_sum_rew),
+    #             '_max_discrew': np.max(disc_sum_rew),
+    #             '_std_discrew': np.var(disc_sum_rew),
+    #             '_Episode': episode,
+    #             '_time_from_beginning_in_minutes': int((time_total.total_seconds() / 60) * 100) / 100.
+    #             })
     logger.log_matching_rate(avg_matching_rate, is_last_iteration)
+    logger.log('matching_rates', avg_matching_rate)
 
 
 def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size,
@@ -352,7 +353,8 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
     
     if scaler.method == 'recording':
         scaler.output_to_csv()
-        
+    logger.output_to_csv()
+
         # TODO: save log, weights, and models
 
 
