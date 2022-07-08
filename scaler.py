@@ -21,7 +21,7 @@ class Scaler(object):
         Args:
             method: 
                 'recording': record current run, to get mean and variance for future runs; while using
-                    0 and 1 for offset and scale for current run; will use a jupyter script to calculate scale and offset
+                    0 and 1 for offset and scale for current run
                 'zero_one': 0 and 1 for offset and scale, not recording
                 'read_in': use given file to load mean and variance
         """
@@ -30,18 +30,46 @@ class Scaler(object):
         self.scale = None
         self.offset = None
 
-        if self.method == 'recording':
-            self.csv_file_addr = './scaler_record/scale_record_' + time.strftime("%Y%m%d-%H%M%S") + '.csv'
-            header = np.arange(self.obs_dim)
-            with open(self.csv_file_addr, 'w') as f:
-                writer = csv.writer(f)
-                writer.writerow(header)
-        elif self.method == 'read_in':
-            read_in_df = pd.read_csv('scaler.csv')
+        self.vars = np.zeros(obs_dim)
+        self.means = np.zeros(obs_dim)
+        self.m = 0
+        self.n = 0
+        self.first_pass = True
+
+        if self.method == 'read_in':
+            read_in_df = pd.read_csv('./scaler_record/scale_record_20220707-222829.csv')
+
             self.offset = read_in_df['means'].values
             epsilon = max(min(read_in_df['stddevs'].min(), .1), 1e-4)
             self.scale = 1. / (read_in_df['stddevs'].values + epsilon) / 3.
             del read_in_df
+
+
+    def update(self, x):
+        """ Update running mean and variance (this is an exact method)
+        Args:
+            x: NumPy array, shape = (N, obs_dim)
+
+        see: https://stats.stackexchange.com/questions/43159/how-to-calculate-pooled-
+               variance-of-two-groups-given-known-group-variances-mean
+        """
+        if self.first_pass:
+            self.means = np.mean(x, axis=0)
+            self.vars = np.var(x, axis=0)
+            self.m = x.shape[0]
+            self.first_pass = False
+        else:
+            n = x.shape[0]
+            new_data_var = np.var(x, axis=0)
+            new_data_mean = np.mean(x, axis=0)
+            new_data_mean_sq = np.square(new_data_mean)
+            new_means = ((self.means * self.m) + (new_data_mean * n)) / (self.m + n)
+            self.vars = (((self.m * (self.vars + np.square(self.means))) +
+                          (n * (new_data_var + new_data_mean_sq))) / (self.m + n) -
+                         np.square(new_means))
+            self.vars = np.maximum(0.0, self.vars)  # occasionally goes negative, clip
+            self.means = new_means
+            self.m += n
 
 
     def get(self):
@@ -54,14 +82,15 @@ class Scaler(object):
             raiseExceptions('Cannot recognize this scaling method.')
 
 
-    def build_csv(self, obs):
+    def output_to_csv(self):
         """
-        Build the csv file that will record the scale and offset for each observation dim and disc_sum_rew
+        In "recording" mode, we want to save the final offset means and stddevs to a csv for future use.
         """
-        f = open(self.csv_file_addr, 'ab')
-        np.savetxt(f, obs, delimiter=",")
-        f.close()
-
+        self.csv_file_addr = './scaler_record/scale_record_' + time.strftime("%Y%m%d-%H%M%S") + '.csv'
+        df = pd.DataFrame()
+        df['means'] = self.means 
+        df['stddevs'] = np.sqrt(self.vars)
+        df.to_csv(self.csv_file_addr, index=False)
 
 
 def main():

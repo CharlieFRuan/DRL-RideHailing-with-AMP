@@ -17,7 +17,7 @@ import datetime
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress TF's log
 
-MAX_ACTORS = 2 # max number of parallel simulations
+MAX_ACTORS = 4 # max number of parallel simulations
 
 
 def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, logger, gamma, cur_iter, episodes, \
@@ -201,7 +201,7 @@ def add_disc_sum_rew(trajectories, gamma, scaler, cur_iter):
     state_times = np.concatenate([t['state_time'][:-burn] for t in trajectories]) 
     observes = np.concatenate([t['state_scaled'][:-burn] for t in trajectories])
     if scaler.method == 'recording':
-        scaler.build_csv(observes)
+        scaler.update(observes)
 
     # TODO: scale disc_sum_rew
     # return observes, disc_sum_rew_norm, state_times 
@@ -350,6 +350,9 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
         print('Finished iteration {}/{}'.format(iteration, num_policy_iterations))
         print('This iteration took %.2f minutes' %(time_took))
     
+    if scaler.method == 'recording':
+        scaler.output_to_csv()
+        
         # TODO: save log, weights, and models
 
 
