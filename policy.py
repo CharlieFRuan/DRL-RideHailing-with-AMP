@@ -151,7 +151,11 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
     # logger.log({'PolicyLoss': loss,
     #             'Clipping': model.clipping_range,
     #             '_lr_multiplier': model.lr_multiplier})
-    logger.log('policyNNLoss', tf.reduce_mean(loss).numpy())  # loss from last epoch
+
+    # loss from last epoch; take mean again because there are many batches; note that this is 
+    # the negative clipping surrogate objective function; is negative because tensorflow minimizes loss
+    # but we want to maximize it here
+    logger.log('policyNNLoss', tf.reduce_mean(loss).numpy())
     
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0

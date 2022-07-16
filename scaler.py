@@ -37,7 +37,7 @@ class Scaler(object):
         self.first_pass = True
 
         if self.method == 'read_in':
-            read_in_df = pd.read_csv('./scaler_record/scale_record_20220707-222829.csv')
+            read_in_df = pd.read_csv('./scaler_record/scale_record_20220708-100cars100eps.csv')
 
             self.offset = read_in_df['means'].values
             epsilon = max(min(read_in_df['stddevs'].min(), .1), 1e-4)

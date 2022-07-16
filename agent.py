@@ -28,13 +28,16 @@ class Agent(object):
         self.network = network 
         self.scaler =  scaler
         obs_dim = network.obs_dim
-        act_dim = network.R * network.R
-        self.policy_model = NNPolicy(obs_dim, act_dim, hid1_mult, hid3_size, sz_voc, embed_dim)
+        self.act_dim = network.R * network.R
+        self.policy_model = NNPolicy(obs_dim, self.act_dim, hid1_mult, hid3_size, sz_voc, embed_dim)
         self.valueNN_model = NNValueFunction(obs_dim, hid1_mult, hid3_size, sz_voc, embed_dim, valNN_train_epoch)
         self.use_AMP = use_AMP
 
         # dummy call to enable setting weights
-        if cur_iter > 1:
+        if cur_iter == 1:
+            self.policy_model.set_weights(policy_weights)
+            self.valueNN_model.set_weights(valueNN_weights)
+        else: 
             obs, x_t = self.network.get_initial_state()
             obs = obs * 1.0
             self.policy_model(tf.expand_dims(obs,0), tf.expand_dims(x_t,0)) 
@@ -114,19 +117,23 @@ class Agent(object):
 
                     # 3. Calculate AMP portion (basically do the exact same things in rest of the function, but for all actions)
                     if self.use_AMP:
-                        cur_next_state_expec_val = 0 # cumulator for next state's value function expecation
+                        # cur_next_state_expec_val = 0 # cumulator for next state's value function expecation
                         next_state = s_running.copy() # next state is based on current state
                         if num_free_nby_cars == 1:
                             # last car in an SDM, needs special treatment, postpone to train_MC.py
                             next_state_expec_vals.append(None)
                         else: 
+                            action_probs = np.zeros(self.act_dim) # the probability for each action
+                            action_vals = np.zeros(self.act_dim) # zeta(s') given we take action a
                             for trip_type_i, prob in enumerate(act_prob_out):
                                 o, d = divmod(trip_type_i, self.network.R)
                                 # 3.1 determine if this action is feasible (i.e. has available car to be associated)
                                 eta_w_car_i = np.where(s_running[self.network.car_dims_cum[o]:\
                                             (self.network.car_dims_cum[o] + self.network.L + 1)] > 0.5)[0]
                                 if len(eta_w_car_i) <= 0:
-                                    continue
+                                    # not a feasible action, view it as 0 probability of being picked
+                                    continue 
+                                action_probs[trip_type_i] = prob # so infeasible ones stay as zero
                                 # 3.2 get next state based on how we define system's dynamic
                                 slot_id_i = self.network.min_to_slot(dec_epoch + eta_w_car_i[0]) 
                                 if next_state[self.network.car_dim + trip_type_i - self.network.num_imp_ride[trip_type_i]] > 0.5:
@@ -146,8 +153,14 @@ class Agent(object):
                                 # 3.3 now we have s', feed it to value function to get the zeta(s')
                                 # not dec_epoch+1 because not last car in SDM
                                 next_state = (next_state - offset) * scale
-                                cur_next_state_expec_val += prob * self.valueNN_model([next_state], np.array([dec_epoch]))
-                            next_state_expec_vals.append(cur_next_state_expec_val.numpy()[0][0])
+                                # cur_next_state_expec_val += prob * self.valueNN_model([next_state], np.array([dec_epoch]))
+                                action_vals[trip_type_i] = self.valueNN_model([next_state], np.array([dec_epoch]))
+
+                            # 3.4 After recording each feasible state's values, calculate the expected zeta value for the next state
+                            # Some actions are infeasible even though its action_prob > 0, reweight so that feasible distribution adds up to 1
+                            action_probs = action_probs / np.sum(action_probs) # now np.sum(action_probs) should be 1
+                            cur_next_state_expec_val = np.dot(action_probs, action_vals)
+                            next_state_expec_vals.append(cur_next_state_expec_val)
 
                     # 4. Now interpretate action based on how we define system's dynamic
                     # determine which time slot it is when the car actually arrives (hence + eta_w_car[0])

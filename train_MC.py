@@ -61,8 +61,8 @@ def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, 
     print('simulation took: %.2f mins' %(sim_time))
 
     # 3. Post-process simulation result
-    average_reward = np.mean(np.concatenate([t['reward'] for t in trajectories]))
-    print('Average cost: ',  -average_reward)
+    # average_reward = np.mean(np.concatenate([t['reward'] for t in trajectories]))
+    # print('Average cost: ',  -average_reward)
 
     return trajectories
 
@@ -135,16 +135,16 @@ def add_disc_sum_rew_AMP(trajectories, scaler, cur_iter, H):
         state_times = trajectory['state_time']
         rewards = np.array(trajectory['reward'])
         zeta_vals = np.squeeze(trajectory['values'].numpy())
-        no_case_2 = False
 
         if state_times[-1] != H-1:
-            # if no state recorded in last epoch, then there is no case 2
-            no_case_2 = True
+            # TODO: if no state recorded in last epoch, is it still called case 2?
+            # In general, what to do when we skip a horizon? (though in large scale, almost impossible)
+            print('WARNING (TODO): No case 2 for AMP (i.e. no last horizon recorded)')
+            print('Last state is at epoch {} instead of {}'.format(state_times[-1], H-1))
 
         # 1.3 Finish calculating expectation of next state's value for last cars in an SDM (case 3)
         last_car_ids = None
-        if not no_case_2:
-            next_state_expec_vals[-1] = 0 # if there is case 2, treat as 0
+        next_state_expec_vals[-1] = 0 # case 2, treat the last state last car as 0, instead of None
         last_car_ids = np.where(next_state_expec_vals==None)[0]
         for id in last_car_ids:
             # TODO: simply use zeta(s_{t+1}) to approximate for now
@@ -386,7 +386,7 @@ if __name__ == "__main__":
     # parser.add_argument('-s', '--skipping_steps', type=int, help='Number of steps for which control is fixed',
     #                     default = 1)
     parser.add_argument('--valNN_train_epoch', type=int, help='Number of epochs to train Value NN',
-                        default = 5)
+                        default = 10)
     parser.add_argument('--policyNN_train_epoch', type=int, help='Number of epochs to train Policy NN',
                         default = 3)
     parser.add_argument('--policy_temp_save_dir', type=str, help='Directory to save and load policy NN each iteration',
