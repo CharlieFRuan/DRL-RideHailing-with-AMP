@@ -18,6 +18,8 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2' # suppress TF's log
 
 MAX_ACTORS = 4 # max number of parallel simulations
+NUM_CPU_MAIN = 1 # number of CPUs to use during main loop of run_iterations
+NUM_CPU_REMAIN = 2 # number of CPUs to use during remainder (since we have more available)
 
 
 def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, logger, gamma, cur_iter, episodes, \
@@ -40,7 +42,7 @@ def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, 
     policy_weight_id = ray.put(policy.get_weights())
     valueNN_weight_id = ray.put(val_func.get_weights())
 
-    simulators = [Agent.remote(network=ray.get(network_id), policy_weights=ray.get(policy_weight_id), \
+    simulators = [Agent.options(num_cpus=NUM_CPU_MAIN).remote(network=ray.get(network_id), policy_weights=ray.get(policy_weight_id), \
         valueNN_weights=ray.get(valueNN_weight_id), scaler=ray.get(scaler_id), hid1_mult=1, hid3_size=5, \
         sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, \
         model_dir=policy_temp_save_dir, cur_iter=cur_iter, valNN_train_epoch=valNN_train_epoch, \
@@ -53,8 +55,21 @@ def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, 
     trajectories = []  # list of trajectories
     for j in range(run_iterations):
         trajectories.extend(ray.get([simulators[i].run_episode.remote() for i in range(MAX_ACTORS)]))
+    
+    # TODO: terminate() not working for some reason, hence use del, not sure if works as expected
+    # ray.get([simulators[i].terminate.remote() for i in range(MAX_ACTORS)]) 
+    del simulators
+    
     if remainder>0:
-        trajectories.extend(ray.get([simulators[i].run_episode.remote() for i in range(remainder)]))
+        # get new simulators, with more CPUs
+        simulators_rem = [Agent.options(num_cpus=NUM_CPU_REMAIN).remote(network=ray.get(network_id), policy_weights=ray.get(policy_weight_id), \
+        valueNN_weights=ray.get(valueNN_weight_id), scaler=ray.get(scaler_id), hid1_mult=1, hid3_size=5, \
+        sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, \
+        model_dir=policy_temp_save_dir, cur_iter=cur_iter, valNN_train_epoch=valNN_train_epoch, \
+        use_AMP=use_AMP) for _ in range(remainder)] 
+
+        trajectories.extend(ray.get([simulators_rem[i].run_episode.remote() for i in range(remainder)]))
+        del simulators_rem
 
     end_time = datetime.datetime.now()
     sim_time = (end_time - start_time).total_seconds() / 60.0
@@ -294,7 +309,7 @@ def log_batch_stats(trajectories, observes, actions, advantages, disc_sum_rew, l
 
 
 def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size,
-         clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir, use_AMP, scale_method):
+         clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir, use_AMP, no_replay_valNN, scale_method):
     """
     # Main training loop
     :param: see ArgumentParser below
@@ -306,7 +321,7 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
     scaler = Scaler(ray.get(network_id).obs_dim, scale_method) 
     # Value Neural Network initialization
     val_func = NNValueFunction(obs_dim=ray.get(network_id).obs_dim, hid1_mult=hid1_mult, hid3_size=hid3_size, \
-        sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, train_epoch=valNN_train_epoch) 
+        sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, train_epoch=valNN_train_epoch, no_replay=no_replay_valNN) 
     # The main Policy Neural Network
     policy = NNPolicy(obs_dim=ray.get(network_id).obs_dim, act_dim=ray.get(network_id).R * ray.get(network_id).R,\
         hid1_mult=hid1_mult, hid3_size=hid3_size, sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, \
@@ -392,6 +407,7 @@ if __name__ == "__main__":
     parser.add_argument('--policy_temp_save_dir', type=str, help='Directory to save and load policy NN each iteration',
                         default = './policyNN_temp_save/policy_temp.h5')
     parser.add_argument('--use_AMP', action='store_true', help='flag to run using AMP estimator')
+    parser.add_argument('--no_replay_valNN', action='store_true', help='do not replay when training value NN')
     parser.add_argument('--scale_method', type=str, help='Method of getting scaler',
                         default = 'zero_one')
     args = parser.parse_args()

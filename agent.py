@@ -44,7 +44,9 @@ class Agent(object):
             self.policy_model.set_weights(policy_weights)
             self.valueNN_model(tf.expand_dims(obs,0), tf.expand_dims(x_t,0))
             self.valueNN_model.set_weights(valueNN_weights)
-        
+    
+    def terminate(self):
+        ray.actor.exit_actor()
 
     def sample_distr(self, obs, x_t, stochastic=True):
         """

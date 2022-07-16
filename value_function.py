@@ -20,7 +20,7 @@ class NNValueFunction(tf.keras.Model):
     Ouput is the Value of the observation.
     """
     
-    def __init__(self, obs_dim, hid1_mult, hid3_size, sz_voc, embed_dim, train_epoch, reg_str=5e-3):
+    def __init__(self, obs_dim, hid1_mult, hid3_size, sz_voc, embed_dim, train_epoch, no_replay=False, reg_str=5e-3):
         """
         obs_dim: dimension of the observation (input)
         hid1_mult: helps compute size of first hidden layer, hid1_mult*(obs_dim + embed_dim)
@@ -28,6 +28,7 @@ class NNValueFunction(tf.keras.Model):
         sz_voc: set to environment's horizon H, helps embed time component
         embed_dim: dimension of time's embedding output
         train_epoch: number of epochs when training
+        no_replay: does not replay previous iteration's training samples for fitting
         reg_str: used for time embedding
         """
         super(NNValueFunction, self).__init__()
@@ -41,6 +42,7 @@ class NNValueFunction(tf.keras.Model):
         self.epochs = train_epoch
         self.lr = 1e-4 
         self.batch_size = 2048
+        self.no_replay = no_replay
         
         # used to store previous step input
         self.replay_buffer_x = None
@@ -107,15 +109,19 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger):
     start_time = datetime.datetime.now()
     # 1. concatenate current data with previous data, and update the replay buffer
     x_train, x_t_train, y_train = None, None, None
-    if model.replay_buffer_x is None:
+
+    if model.no_replay: 
         x_train, x_t_train, y_train = x, x_t, y
-    else:
-        x_train = np.concatenate([x, model.replay_buffer_x])
-        x_t_train = np.concatenate([x_t, model.replay_buffer_x_t])
-        y_train = np.concatenate([y, model.replay_buffer_y])
-    model.replay_buffer_x = x  
-    model.replay_buffer_x_t = x_t
-    model.replay_buffer_y = y  
+    else: 
+        if model.replay_buffer_x is None:
+            x_train, x_t_train, y_train = x, x_t, y
+        else:
+            x_train = np.concatenate([x, model.replay_buffer_x])
+            x_t_train = np.concatenate([x_t, model.replay_buffer_x_t])
+            y_train = np.concatenate([y, model.replay_buffer_y])
+        model.replay_buffer_x = x  
+        model.replay_buffer_x_t = x_t
+        model.replay_buffer_y = y  
 
     # 2. prepare loss, optimizer, and dataloader
     optimizer = tf.keras.optimizers.Adam(model.lr) #TODO: see what to do with learning rate
