@@ -137,8 +137,9 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger):
             with tf.GradientTape() as tape:
                 y_hat_i = model(x_train_i, x_t_train_i, training=True)
                 loss = tf.keras.losses.mean_squared_error(y_train_i, y_hat_i)
-                gradients = tape.gradient(loss, model.trainable_variables)
-                optimizer.apply_gradients(zip(gradients, model.trainable_variables))
+                print("valueNNLoss: ", tf.reduce_mean(loss).numpy())
+            gradients = tape.gradient(loss, model.trainable_variables)
+            optimizer.apply_gradients(zip(gradients, model.trainable_variables))
     logger.log('valNNLoss', tf.reduce_mean(loss).numpy())  # loss from last epoch
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0

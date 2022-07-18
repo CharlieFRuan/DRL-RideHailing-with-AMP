@@ -142,11 +142,12 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
             weighted_clipped_probs = clipped_probs * advantages
             loss = -tf.math.minimum(weighted_probs, weighted_clipped_probs)
             loss = tf.math.reduce_mean(loss)
+            print("policyNNLoss: ", loss.numpy())
 
-            # 2.3 backpropagate
-            model_params = model.trainable_variables
-            gradients = tape.gradient(loss, model_params)
-            optimizer.apply_gradients(zip(gradients, model_params))
+        # 2.3 backpropagate
+        model_params = model.trainable_variables
+        gradients = tape.gradient(loss, model_params)
+        optimizer.apply_gradients(zip(gradients, model_params))
     
     # logger.log({'PolicyLoss': loss,
     #             'Clipping': model.clipping_range,
@@ -155,7 +156,7 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
     # loss from last epoch; take mean again because there are many batches; note that this is 
     # the negative clipping surrogate objective function; is negative because tensorflow minimizes loss
     # but we want to maximize it here
-    logger.log('policyNNLoss', tf.reduce_mean(loss).numpy())
+    logger.log('policyNNLoss', loss.numpy())
     
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0
