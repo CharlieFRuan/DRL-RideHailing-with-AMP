@@ -308,19 +308,19 @@ def log_batch_stats(trajectories, observes, actions, advantages, disc_sum_rew, l
     #             '_Episode': episode,
     #             '_time_from_beginning_in_minutes': int((time_total.total_seconds() / 60) * 100) / 100.
     #             })
-    logger.log_matching_rate(avg_matching_rate, is_last_iteration)
+    # logger.log_matching_rate(avg_matching_rate, is_last_iteration)
     logger.log('matching_rates', avg_matching_rate)
 
 
 def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size,
-         clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir, use_AMP, use_method2_AMP, no_replay_valNN, scale_method):
+         clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir, use_AMP, use_method2_AMP, no_replay_valNN, scale_method, logname):
     """
     # Main training loop
     :param: see ArgumentParser below
     """
     now = datetime.datetime.utcnow().strftime("%b-%d_%H-%M-%S")  # create unique directories
     time_start= datetime.datetime.now()
-    logger = Logger(logname=ray.get(network_id).network_name, now=now, time_start=time_start)
+    logger = Logger(logname=logname, now=now, time_start=time_start, policy_iter=num_policy_iterations)
 
     scaler = Scaler(ray.get(network_id).obs_dim, scale_method) 
     # Value Neural Network initialization
@@ -354,7 +354,7 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
             observes, disc_sum_rew_norm, state_times = add_disc_sum_rew(trajectories, gamma, scaler, iteration)
 
         # Update value NN with new data
-        fit_valueNN(val_func, observes, state_times, disc_sum_rew_norm, logger)
+        fit_valueNN(val_func, observes, state_times, disc_sum_rew_norm, logger, cur_iter=iteration-1)
         # Add estimated values to each state in each episode using the updated value NN
         add_value(trajectories, val_func, scaler)  
         # Prepare input for updating policy NN, calculate advantage for each state-action pair
@@ -362,7 +362,7 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
         # Log statistics
         log_batch_stats(trajectories, observes, actions, advantages, disc_sum_rew, logger, iteration, avg_matching_rate, iteration==num_policy_iterations)
         # Update Policy NN
-        updatePolicy(policy, observes, state_times, actions, np.squeeze(advantages), logger)
+        updatePolicy(policy, observes, state_times, actions, np.squeeze(advantages), logger, cur_iter=iteration-1)
 
         logger.write(display=True)  # write logger results to file and stdout
         end_time = datetime.datetime.now()
@@ -415,6 +415,8 @@ if __name__ == "__main__":
     parser.add_argument('--no_replay_valNN', action='store_true', help='do not replay when training value NN')
     parser.add_argument('--scale_method', type=str, help='Method of getting scaler',
                         default = 'zero_one')
+    parser.add_argument('--logname', type=str, help='Name of logging output folder under stats_output',
+                        default = 'no_name')
     args = parser.parse_args()
 
     print('Starting')

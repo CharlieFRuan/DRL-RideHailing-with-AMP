@@ -107,7 +107,7 @@ class NNPolicy(tf.keras.Model):
     #     # return weights
 
 
-def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: Logger):
+def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: Logger, cur_iter):
     """
     Policy Neural Network update using data from trajectories. 
     Referred to Machine Learning with Phil's PPO implementation.
@@ -142,7 +142,7 @@ def updatePolicy(model: NNPolicy, observes, times, actions, advantages, logger: 
             weighted_clipped_probs = clipped_probs * advantages
             loss = -tf.math.minimum(weighted_probs, weighted_clipped_probs)
             loss = tf.math.reduce_mean(loss)
-            print("policyNNLoss: ", loss.numpy())
+            logger.log('policyNNLoss_full', loss.numpy(), cur_policy_iter=cur_iter) # per iteration loss
 
         # 2.3 backpropagate
         model_params = model.trainable_variables

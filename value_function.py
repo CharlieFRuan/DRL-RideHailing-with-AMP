@@ -95,7 +95,7 @@ class NNValueFunction(tf.keras.Model):
         output = self.output_layer(output)
         return output
 
-def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger):
+def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger, cur_iter):
     """
     Fit the value NN model given the training data from trajectories.
     Uses both current data and previous data (from previous update, previous outermost epoch).
@@ -132,15 +132,18 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger):
     print("len(dataloader): ", len(dataloader))
 
     loss = 0
+    total_loss = 0 # for logging purpose
     for e in range(model.epochs):
         for x_train_i, x_t_train_i, y_train_i in dataloader:
             with tf.GradientTape() as tape:
                 y_hat_i = model(x_train_i, x_t_train_i, training=True)
-                loss = tf.keras.losses.mean_squared_error(y_train_i, y_hat_i)
-                print("valueNNLoss: ", tf.reduce_mean(loss).numpy())
+                loss = tf.keras.losses.mean_squared_error(y_train_i, y_hat_i) # has shape of len(x_train_i)
             gradients = tape.gradient(loss, model.trainable_variables)
             optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-    logger.log('valNNLoss', tf.reduce_mean(loss).numpy())  # loss from last epoch
+            total_loss += tf.reduce_mean(loss).numpy() # add current batch's avergae loss
+        avg_loss = total_loss / len(dataloader) # averaged loss to a single data entry
+        logger.log('valNNLoss_full', avg_loss, cur_policy_iter=cur_iter) # per iteration loss
+    logger.log('valNNLoss', tf.reduce_mean(avg_loss).numpy())  # loss from last epoch's average over batches
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0
     print('fit_valueNN took: %.2f mins' %(time_took))
