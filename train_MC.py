@@ -23,7 +23,7 @@ NUM_CPU_REMAIN = 2 # number of CPUs to use during remainder (since we have more 
 
 
 def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, logger, gamma, cur_iter, episodes, \
-    policy_temp_save_dir, valNN_train_epoch, use_AMP):
+    policy_temp_save_dir, valNN_train_epoch, use_AMP, use_method2_AMP):
     """
     Run given policy and collect data
     network_id: queuing network structure and first-order info
@@ -46,7 +46,7 @@ def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, 
         valueNN_weights=ray.get(valueNN_weight_id), scaler=ray.get(scaler_id), hid1_mult=1, hid3_size=5, \
         sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, \
         model_dir=policy_temp_save_dir, cur_iter=cur_iter, valNN_train_epoch=valNN_train_epoch, \
-        use_AMP=use_AMP) for _ in range(MAX_ACTORS)] 
+        use_AMP=use_AMP, use_method2_AMP=use_method2_AMP) for _ in range(MAX_ACTORS)] 
     run_iterations = episodes // MAX_ACTORS # do not run more parallel processes than number of cores
     remainder = episodes - run_iterations * MAX_ACTORS
 
@@ -66,7 +66,7 @@ def run_policy(network_id, policy: NNPolicy, val_func: NNValueFunction, scaler, 
         valueNN_weights=ray.get(valueNN_weight_id), scaler=ray.get(scaler_id), hid1_mult=1, hid3_size=5, \
         sz_voc=ray.get(network_id).H, embed_dim=ray.get(network_id).num_slots*2, \
         model_dir=policy_temp_save_dir, cur_iter=cur_iter, valNN_train_epoch=valNN_train_epoch, \
-        use_AMP=use_AMP) for _ in range(remainder)] 
+        use_AMP=use_AMP, use_method2_AMP=use_method2_AMP) for _ in range(remainder)] 
 
         trajectories.extend(ray.get([simulators_rem[i].run_episode.remote() for i in range(remainder)]))
         del simulators_rem
@@ -133,12 +133,13 @@ def relarive_af_AMP(rewards, zeta_vals, next_state_expec_vals, lam=1):
     return cumsum_AMP
 
 
-def add_disc_sum_rew_AMP(trajectories, scaler, cur_iter, H):
+def add_disc_sum_rew_AMP(trajectories, scaler, cur_iter, H, use_method2_AMP):
     """
     Compute value function for further training of Value Neural Network, use AMP estimator to reduce variance
     trajectories: simulated data
     scaler: normalization values
     cur_iter: current policy iteration for the outermost loop in main
+    use_method2_AMP: whether to use method 1.2 as described in slides
     Case 1: when the state is in the middle of an SDM
     Case 2: when the state is the last car of an SDM, also the last epoch of a trajectory
     Case 3: when the state is the last car of an SDM, but not the last epoch of a trajectory
@@ -161,6 +162,9 @@ def add_disc_sum_rew_AMP(trajectories, scaler, cur_iter, H):
         last_car_ids = None
         next_state_expec_vals[-1] = 0 # case 2, treat the last state last car as 0, instead of None
         last_car_ids = np.where(next_state_expec_vals==None)[0]
+        if use_method2_AMP:
+            # if using method 2, then there should not be any None, since last cars are delt with in run_episode
+            assert len(last_car_ids) == 0
         for id in last_car_ids:
             # TODO: simply use zeta(s_{t+1}) to approximate for now
             next_state_expec_vals[id] = zeta_vals[id+1]
@@ -309,7 +313,7 @@ def log_batch_stats(trajectories, observes, actions, advantages, disc_sum_rew, l
 
 
 def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid1_mult, hid3_size,
-         clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir, use_AMP, no_replay_valNN, scale_method):
+         clipping_parameter, valNN_train_epoch, policyNN_train_epoch, policy_temp_save_dir, use_AMP, use_method2_AMP, no_replay_valNN, scale_method):
     """
     # Main training loop
     :param: see ArgumentParser below
@@ -340,12 +344,12 @@ def main(network_id, num_policy_iterations, gamma, lam, kl_targ, batch_size, hid
         policy.lr_multiplier = max(0.05, alpha)
 
         # Use parallel agent to rollout episodes
-        trajectories = run_policy(network_id, policy, val_func, scaler, logger, gamma, iteration, batch_size, policy_temp_save_dir, valNN_train_epoch, use_AMP)
+        trajectories = run_policy(network_id, policy, val_func, scaler, logger, gamma, iteration, batch_size, policy_temp_save_dir, valNN_train_epoch, use_AMP, use_method2_AMP)
         
         # Calculate value function for each state in each trajectory (step 3.5 in paper; i.e. calculate one-rep estimation of V for each state)
         if use_AMP:
             add_value(trajectories, val_func, scaler) # first use ValNN from i-1 to calculate value, prepare for AMP
-            observes, disc_sum_rew_norm, state_times = add_disc_sum_rew_AMP(trajectories, scaler, iteration, ray.get(network_id).H)
+            observes, disc_sum_rew_norm, state_times = add_disc_sum_rew_AMP(trajectories, scaler, iteration, ray.get(network_id).H, use_method2_AMP)
         else:
             observes, disc_sum_rew_norm, state_times = add_disc_sum_rew(trajectories, gamma, scaler, iteration)
 
@@ -407,6 +411,7 @@ if __name__ == "__main__":
     parser.add_argument('--policy_temp_save_dir', type=str, help='Directory to save and load policy NN each iteration',
                         default = './policyNN_temp_save/policy_temp.h5')
     parser.add_argument('--use_AMP', action='store_true', help='flag to run using AMP estimator')
+    parser.add_argument('--use_method2_AMP', action='store_true', help='Use method 1.2 for AMP case 2')
     parser.add_argument('--no_replay_valNN', action='store_true', help='do not replay when training value NN')
     parser.add_argument('--scale_method', type=str, help='Method of getting scaler',
                         default = 'zero_one')

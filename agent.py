@@ -20,7 +20,7 @@ import tensorflow as tf
 class Agent(object):
     
     def __init__(self, network, policy_weights, valueNN_weights, scaler: Scaler, hid1_mult, \
-                hid3_size, sz_voc, embed_dim, model_dir, cur_iter, valNN_train_epoch, use_AMP):
+                hid3_size, sz_voc, embed_dim, model_dir, cur_iter, valNN_train_epoch, use_AMP, use_method2_AMP):
         """
         network: transporation network, our environment
         scaler: for standardizing/normalizing values
@@ -32,6 +32,7 @@ class Agent(object):
         self.policy_model = NNPolicy(obs_dim, self.act_dim, hid1_mult, hid3_size, sz_voc, embed_dim)
         self.valueNN_model = NNValueFunction(obs_dim, hid1_mult, hid3_size, sz_voc, embed_dim, valNN_train_epoch)
         self.use_AMP = use_AMP
+        self.use_method2_AMP = use_method2_AMP
 
         # dummy call to enable setting weights
         if cur_iter == 1:
@@ -121,9 +122,12 @@ class Agent(object):
                     if self.use_AMP:
                         # cur_next_state_expec_val = 0 # cumulator for next state's value function expecation
                         next_state = s_running.copy() # next state is based on current state
-                        if num_free_nby_cars == 1:
-                            # last car in an SDM, needs special treatment, postpone to train_MC.py
+                        if num_free_nby_cars == 1 and not self.use_method2_AMP:
+                            # last car in an SDM, needs special treatment, postpone to train_MC.py for method 1
+                            print('Debug: special treatment')
                             next_state_expec_vals.append(None)
+                        elif num_free_nby_cars == 1 and dec_epoch == self.network.H - 1:
+                            next_state_expec_vals.append(None) # case 2, method 2 does not apply here
                         else: 
                             action_probs = np.zeros(self.act_dim) # the probability for each action
                             action_vals = np.zeros(self.act_dim) # zeta(s') given we take action a
@@ -152,11 +156,23 @@ class Agent(object):
                                     next_state[self.network.car_dims_cum[-1] + d * (1 + self.network.L) + eta_w_car_i[0]] += 1   
                                 next_state[self.network.car_dims_cum[o]+eta_w_car_i[0]] -= 1  # One fewer available nearby car
 
+                                next_epoch_AMP = None
+                                if num_free_nby_cars == 1:
+                                    assert self.use_method2_AMP # now we do special treatment for last car in SDM with method 2
+                                    # do it just like the main loop in step 4, but need to REVERT changes made to self.network
+                                    temp_next_ride = self.network.next_ride # back up for reverting later
+                                    next_epoch_AMP = self.network.get_next_state(next_state, dec_epoch) # in-place changes take place in next_state
+                                    print('Debug: previous next_ride: {}, after next_ride: {}'.format(temp_next_ride, self.network.next_ride))
+                                    self.network.next_ride = temp_next_ride
+
                                 # 3.3 now we have s', feed it to value function to get the zeta(s')
                                 # not dec_epoch+1 because not last car in SDM
                                 next_state = (next_state - offset) * scale
                                 # cur_next_state_expec_val += prob * self.valueNN_model([next_state], np.array([dec_epoch]))
-                                action_vals[trip_type_i] = self.valueNN_model([next_state], np.array([dec_epoch]))
+                                if num_free_nby_cars > 1:
+                                    action_vals[trip_type_i] = self.valueNN_model([next_state], np.array([dec_epoch]))
+                                else:
+                                    action_vals[trip_type_i] = self.valueNN_model([next_state], np.array([next_epoch_AMP]))
 
                             # 3.4 After recording each feasible state's values, calculate the expected zeta value for the next state
                             # Some actions are infeasible even though its action_prob > 0, reweight so that feasible distribution adds up to 1
