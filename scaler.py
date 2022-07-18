@@ -37,6 +37,7 @@ class Scaler(object):
         self.first_pass = True
 
         if self.method == 'read_in':
+            print('Reading in recorded scaler')
             read_in_df = pd.read_csv('./scaler_record/scale_record_20220708-100cars100eps.csv')
 
             self.offset = read_in_df['means'].values
