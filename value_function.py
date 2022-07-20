@@ -132,8 +132,8 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger, cur_iter):
     print("len(dataloader): ", len(dataloader))
 
     loss = 0
-    total_loss = 0 # for logging purpose
     for e in range(model.epochs):
+        total_loss = 0 # for logging purpose
         for x_train_i, x_t_train_i, y_train_i in dataloader:
             with tf.GradientTape() as tape:
                 y_hat_i = model(x_train_i, x_t_train_i, training=True)
@@ -143,6 +143,7 @@ def fit_valueNN(model: NNValueFunction, x, x_t, y, logger: Logger, cur_iter):
             total_loss += tf.reduce_mean(loss).numpy() # add current batch's avergae loss
         avg_loss = total_loss / len(dataloader) # averaged loss to a single data entry
         logger.log('valNNLoss_full', avg_loss, cur_policy_iter=cur_iter) # per iteration loss
+        print('valNNLoss at epoch {}: {}'.format(e, avg_loss))
     logger.log('valNNLoss', tf.reduce_mean(avg_loss).numpy())  # loss from last epoch's average over batches
     end_time = datetime.datetime.now()
     time_took = (end_time - start_time).total_seconds() / 60.0

@@ -124,7 +124,7 @@ class Agent(object):
                         next_state = s_running.copy() # next state is based on current state
                         if num_free_nby_cars == 1 and not self.use_method2_AMP:
                             # last car in an SDM, needs special treatment, postpone to train_MC.py for method 1
-                            print('Debug: special treatment')
+                            # print('Debug: special treatment')
                             next_state_expec_vals.append(None)
                         elif num_free_nby_cars == 1 and dec_epoch == self.network.H - 1:
                             next_state_expec_vals.append(None) # case 2, method 2 does not apply here
@@ -162,7 +162,7 @@ class Agent(object):
                                     # do it just like the main loop in step 4, but need to REVERT changes made to self.network
                                     temp_next_ride = self.network.next_ride # back up for reverting later
                                     next_epoch_AMP = self.network.get_next_state(next_state, dec_epoch) # in-place changes take place in next_state
-                                    print('Debug: previous next_ride: {}, after next_ride: {}'.format(temp_next_ride, self.network.next_ride))
+                                    # print('Debug: previous next_ride: {}, after next_ride: {}'.format(temp_next_ride, self.network.next_ride))
                                     self.network.next_ride = temp_next_ride
 
                                 # 3.3 now we have s', feed it to value function to get the zeta(s')
