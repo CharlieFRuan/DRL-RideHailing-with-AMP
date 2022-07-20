@@ -7,7 +7,6 @@ import numpy as np
 import pandas as pd
 import csv
 import time
-from logging import raiseExceptions
 
 class Scaler(object):
     """ Generate scale and offset based on running mean and stddev along axis=0
@@ -80,7 +79,7 @@ class Scaler(object):
         elif self.method == "read_in":
             return self.offset, self.scale
         else:
-            raiseExceptions('Cannot recognize this scaling method.')
+            raise Exception('Cannot recognize this scaling method.')
 
 
     def output_to_csv(self):

@@ -4,7 +4,6 @@ Each agent has a corresponding PolicyNN, and the class has functions that determ
 trains the policyNN, run an episode with the policy.
 """
 
-from logging import raiseExceptions
 import ray
 # from env import Env
 from scaler import Scaler
@@ -64,7 +63,7 @@ class Agent(object):
             dist = tfp.distributions.Categorical(act_prob_out)
             return dist, act_prob_out[0].numpy() # [0] because otherwise it is (1,R*R) shape tensor
         else:
-            raiseExceptions('Have not implemented deterministic yet.')
+            raise Exception('Have not implemented deterministic yet.')
 
 
     def run_episode(self):
@@ -87,6 +86,7 @@ class Agent(object):
         s_running, dec_epoch = self.network.get_initial_state()  # unscaled; 
 
         while dec_epoch < self.network.H:
+            # note that dec_epoch starts at 0, so dec_epoch = H is essentially H+1 in paper
             # total number of cars within L minutes away from their destination
             num_free_nby_cars = self.network.num_avb_nby_cars(s_running)
 
@@ -127,6 +127,7 @@ class Agent(object):
                             # print('Debug: special treatment')
                             next_state_expec_vals.append(None)
                         elif num_free_nby_cars == 1 and dec_epoch == self.network.H - 1:
+                            # if it is last epoch, always None
                             next_state_expec_vals.append(None) # case 2, method 2 does not apply here
                         else: 
                             action_probs = np.zeros(self.act_dim) # the probability for each action
