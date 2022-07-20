@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 import time
 import os
-from logging import raiseExceptions
 
 """
 Created by Charlie 5/3/22, just for a placeholder so that the file can run.
@@ -45,9 +44,9 @@ class Logger(object):
         is_by_iter = metric_name in self.metric_dict_by_iter.keys()
         is_other_metric = metric_name in self.other_metrics_dict.keys()
         if is_by_iter and is_other_metric:
-            raiseExceptions("Unclear metric name, both dictionaries have this")
+            raise Exception("Unclear metric name, both dictionaries have this")
         if not(is_by_iter or is_other_metric):
-            raiseExceptions("Metric name not found")
+            raise Exception("Metric name not found")
 
         if is_by_iter: 
             self.metric_dict_by_iter[metric_name].append(metric_val)

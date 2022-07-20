@@ -157,6 +157,8 @@ def add_disc_sum_rew_AMP(trajectories, scaler, cur_iter, H, use_method2_AMP):
             # In general, what to do when we skip a horizon? (though in large scale, almost impossible)
             print('WARNING (TODO): No case 2 for AMP (i.e. no last horizon recorded)')
             print('Last state is at epoch {} instead of {}'.format(state_times[-1], H-1))
+        if next_state_expec_vals[-1] != None:
+            raise Exception("Last state AMP is not None, but expecting None. ")
 
         # 1.3 Finish calculating expectation of next state's value for last cars in an SDM (case 3)
         last_car_ids = None
@@ -166,7 +168,7 @@ def add_disc_sum_rew_AMP(trajectories, scaler, cur_iter, H, use_method2_AMP):
             # if using method 2, then there should not be any None, since last cars are delt with in run_episode
             assert len(last_car_ids) == 0
         for id in last_car_ids:
-            # TODO: simply use zeta(s_{t+1}) to approximate for now
+            # Simply use zeta(s_{t+1}) to approximate for Method 1.1
             next_state_expec_vals[id] = zeta_vals[id+1]
         # use astype, otherwise the dtype is object due to None initially
         next_state_expec_vals = next_state_expec_vals.astype('float64') 
