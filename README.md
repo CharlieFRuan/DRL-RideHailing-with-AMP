@@ -1,4 +1,6 @@
-# ride_hailing_drl_v2
-Scalable Deep Reinforcement Learning applied on ride-hailing systems
+# Deep RL on Ride-Hailing Systems with AMP
+Scalable Deep Reinforcement Learning applied on ride-hailing systems, with Approximating Martingale Process for Variance Reduction.
 
-Rewritten/Updated code from https://github.com/mark-gluzman/ride_hailing, with the goal of using the most recent libraries (Tensorflow 1.3.1 -> 2.8.0 and Ray 0.6.0 -> 1.12.0).
+Please refer to https://arxiv.org/abs/2211.15886 for details.
+
+This is a follow-up work on https://arxiv.org/abs/2009.14679, and the code is based on https://github.com/mark-gluzman/ride_hailing.
